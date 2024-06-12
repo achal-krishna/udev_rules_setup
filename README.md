@@ -22,4 +22,6 @@ This is a graphical user interface (GUI) application for managing Udev rules in 
 
 1. Download udev_setup to your local machine
 2. Install dependencies (if not already installed)
-3. Run the application
+3. Right-click and make the file executable.
+4. Run the application
+
