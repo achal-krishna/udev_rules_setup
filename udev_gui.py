@@ -1,13 +1,13 @@
 import sys
 import subprocess
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QMessageBox, QScrollArea
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QMessageBox, QScrollArea,QHBoxLayout
 import os
 
 class UdevRuleGUI(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.rules_file = '/etc/udev/rules.d/clab.rules'
+        self.rules_file = '/etc/udev/rules.d/batman.rules'
         self.rules = self.read_rules()
         self.usb_devices = self.get_usb_devices()
         self.name_inputs = []
@@ -16,7 +16,10 @@ class UdevRuleGUI(QWidget):
 
     def initUI(self):
         self.setWindowTitle('Udev Rule Setup')
+        self.setStyleSheet('background-color: #f0f0f0;')  # Set background color
 
+        self.old_devices_label = QLabel('Saved Devices')
+        self.old_devices_label.setStyleSheet('font-weight: bold;')  # Set bold font
         self.layout = QVBoxLayout()
 
         # Create a scroll area for the existing rules
@@ -30,10 +33,12 @@ class UdevRuleGUI(QWidget):
         self.scroll_content.setLayout(self.scroll_layout)
         self.scroll_area.setWidget(self.scroll_content)
 
+        self.layout.addWidget(self.old_devices_label)
         self.layout.addWidget(self.scroll_area)
 
         # Add the section for new devices
         self.new_devices_label = QLabel('New Devices')
+        self.new_devices_label.setStyleSheet('font-weight: bold;')  # Set bold font
         self.new_devices_layout = QGridLayout()
         self.new_device_inputs = []
 
@@ -43,13 +48,19 @@ class UdevRuleGUI(QWidget):
         self.layout.addLayout(self.new_devices_layout)
 
         # Add the update and finish buttons
+        self.button_layout = QHBoxLayout()  # Use horizontal layout for buttons
+
         self.update_button = QPushButton('Update All')
+        self.update_button.setStyleSheet('background-color: #4CAF50; color: white;')  # Green button
         self.update_button.clicked.connect(self.update_all_rules)
-        self.layout.addWidget(self.update_button)
+        self.button_layout.addWidget(self.update_button)
 
         self.finish_button = QPushButton('Finish')
+        self.finish_button.setStyleSheet('background-color: #f44336; color: white;')  # Red button
         self.finish_button.clicked.connect(self.close)
-        self.layout.addWidget(self.finish_button)
+        self.button_layout.addWidget(self.finish_button)
+
+        self.layout.addLayout(self.button_layout)
 
         self.setLayout(self.layout)
 
@@ -94,49 +105,48 @@ class UdevRuleGUI(QWidget):
         return rules
 
     def populate_rules(self):
+        self.scroll_layout.addWidget(QLabel('Device Name'), 0, 0)
+        self.scroll_layout.addWidget(QLabel('Vendor ID'), 0, 1)
+        self.scroll_layout.addWidget(QLabel('Product ID'), 0, 2)
+        self.scroll_layout.addWidget(QLabel('Serial'), 0, 3)
+        self.scroll_layout.addWidget(QLabel('Mode'), 0, 4)
+        self.scroll_layout.addWidget(QLabel('Custom Name'), 0, 5)
+
         for i, (vendor_id, product_id, serial_attr, mode, custom_name) in enumerate(self.rules):
             usb_device_name = self.usb_devices.get((vendor_id, product_id), 'Not Connected')
-            vendor_label = QLabel(f'Vendor ID: {vendor_id}')
-            product_label = QLabel(f'Product ID: {product_id}')
-            device_name_label = QLabel(f'Device Name: {usb_device_name}')
-            serial_label = QLabel(f'Serial: {serial_attr}')
-            mode_label = QLabel(f'Mode: {mode}')
+
+            # Populate details
+            self.scroll_layout.addWidget(QLabel(usb_device_name), i + 1, 0)
+            self.scroll_layout.addWidget(QLabel(vendor_id), i + 1, 1)
+            self.scroll_layout.addWidget(QLabel(product_id), i + 1, 2)
+            self.scroll_layout.addWidget(QLabel(serial_attr), i + 1, 3)
+            self.scroll_layout.addWidget(QLabel(mode), i + 1, 4)
             name_input = QLineEdit(custom_name)
             self.name_inputs.append(name_input)
-
-            self.scroll_layout.addWidget(vendor_label, i, 0)
-            self.scroll_layout.addWidget(product_label, i, 1)
-            self.scroll_layout.addWidget(device_name_label, i, 2)
-            self.scroll_layout.addWidget(serial_label, i, 3)
-            self.scroll_layout.addWidget(mode_label, i, 4)
-            self.scroll_layout.addWidget(name_input, i, 5)
+            self.scroll_layout.addWidget(name_input, i + 1, 5)
 
     def populate_new_devices(self):
+        self.new_devices_layout.addWidget(QLabel('Device Name'), 0, 0)
+        self.new_devices_layout.addWidget(QLabel('Vendor ID'), 0, 1)
+        self.new_devices_layout.addWidget(QLabel('Product ID'), 0, 2)
+        self.new_devices_layout.addWidget(QLabel('Serial'), 0, 3)
+        self.new_devices_layout.addWidget(QLabel('Mode'), 0, 4)
+        self.new_devices_layout.addWidget(QLabel('Custom Name'), 0, 5)
+
         existing_devices = {(vendor_id, product_id) for vendor_id, product_id, _, _, _ in self.rules}
         new_devices = [(vendor_id, product_id, name) for (vendor_id, product_id), name in self.usb_devices.items() if (vendor_id, product_id) not in existing_devices]
 
         for i, (vendor_id, product_id, device_name) in enumerate(new_devices):
-            vendor_label = QLabel(f'Vendor ID: {vendor_id}')
-            product_label = QLabel(f'Product ID: {product_id}')
-            device_name_label = QLabel(f'Device Name: {device_name}')
-            serial_label = QLabel('Serial:')
-            serial_input = QLineEdit()
-            mode_label = QLabel('Mode:')
-            mode_input = QLineEdit('0666')
-            name_label = QLabel('Custom Name:')
+            self.new_devices_layout.addWidget(QLabel(device_name), i + 1, 0)
+            self.new_devices_layout.addWidget(QLabel(vendor_id), i + 1, 1)
+            self.new_devices_layout.addWidget(QLabel(product_id), i + 1, 2)
+            serial_input = QLineEdit('')
+            self.new_devices_layout.addWidget(serial_input, i + 1,3)
+            mode_input = QLineEdit('0777')
+            self.new_devices_layout.addWidget(mode_input, i + 1, 4)
             name_input = QLineEdit()
-
+            self.new_devices_layout.addWidget(name_input, i + 1, 5)
             self.new_device_inputs.append((vendor_id, product_id, serial_input, mode_input, name_input))
-
-            self.new_devices_layout.addWidget(vendor_label, i, 0)
-            self.new_devices_layout.addWidget(product_label, i, 1)
-            self.new_devices_layout.addWidget(device_name_label, i, 2)
-            self.new_devices_layout.addWidget(serial_label, i, 3)
-            self.new_devices_layout.addWidget(serial_input, i, 4)
-            self.new_devices_layout.addWidget(mode_label, i, 5)
-            self.new_devices_layout.addWidget(mode_input, i, 6)
-            self.new_devices_layout.addWidget(name_label, i, 7)
-            self.new_devices_layout.addWidget(name_input, i, 8)
 
     def restart_application(self):
         python = sys.executable
@@ -146,7 +156,7 @@ class UdevRuleGUI(QWidget):
         try:
             with open(self.rules_file, 'w') as f:
                 # Update existing rules
-                for i, (vendor_id, product_id, serial_attr, mode, old_custom_name) in enumerate(self.rules):
+                for i, (vendor_id, product_id, serial_attr,mode, old_custom_name) in enumerate(self.rules):
                     new_custom_name = self.name_inputs[i].text()
                     if new_custom_name:  # Check if custom name is provided
                         if serial_attr:
