@@ -1,6 +1,6 @@
 import sys
 import subprocess
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QMessageBox, QScrollArea,QHBoxLayout
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QGridLayout, QMessageBox, QScrollArea, QHBoxLayout, QFileDialog
 import os
 
 class UdevRuleGUI(QWidget):
@@ -11,6 +11,7 @@ class UdevRuleGUI(QWidget):
         self.rules = self.read_rules()
         self.usb_devices = self.get_usb_devices()
         self.name_inputs = []
+        self.new_device_inputs = []  # Initialize new_device_inputs here
 
         self.initUI()
 
@@ -18,33 +19,36 @@ class UdevRuleGUI(QWidget):
         self.setWindowTitle('Udev Rule Setup')
         self.setStyleSheet('background-color: #f0f0f0;')  # Set background color
 
+        self.layout = QVBoxLayout()
+        # Add the file selection button at the bottom left corner
+        self.file_button_layout = QHBoxLayout()
+        self.file_button_layout.addStretch()  # Add stretch to push the button to the left
+        self.file_button = QPushButton('Select Rules File')
+        self.file_button.setStyleSheet('background-color: #2196F3; color: white;')  # Blue button
+        self.file_button.clicked.connect(self.select_file)
+        self.file_button_layout.addWidget(self.file_button)
+
+        self.layout.addLayout(self.file_button_layout)
         self.old_devices_label = QLabel('Saved Devices')
         self.old_devices_label.setStyleSheet('font-weight: bold;')  # Set bold font
-        self.layout = QVBoxLayout()
+        self.layout.addWidget(self.old_devices_label)
 
         # Create a scroll area for the existing rules
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_content = QWidget()
         self.scroll_layout = QGridLayout()
-
-        self.populate_rules()
-
         self.scroll_content.setLayout(self.scroll_layout)
         self.scroll_area.setWidget(self.scroll_content)
 
-        self.layout.addWidget(self.old_devices_label)
         self.layout.addWidget(self.scroll_area)
 
         # Add the section for new devices
         self.new_devices_label = QLabel('New Devices')
         self.new_devices_label.setStyleSheet('font-weight: bold;')  # Set bold font
-        self.new_devices_layout = QGridLayout()
-        self.new_device_inputs = []
-
-        self.populate_new_devices()
-
         self.layout.addWidget(self.new_devices_label)
+
+        self.new_devices_layout = QGridLayout()
         self.layout.addLayout(self.new_devices_layout)
 
         # Add the update and finish buttons
@@ -64,6 +68,9 @@ class UdevRuleGUI(QWidget):
 
         self.setLayout(self.layout)
 
+        self.populate_rules()
+        self.populate_new_devices()
+
     def get_usb_devices(self):
         usb_devices = {}
         try:
@@ -79,6 +86,15 @@ class UdevRuleGUI(QWidget):
         except subprocess.CalledProcessError:
             pass
         return usb_devices
+
+    def select_file(self):
+        options = QFileDialog.Options()
+        file, _ = QFileDialog.getOpenFileName(self, "Select Udev Rules File", "/etc/udev/rules.d/", "Rules Files (*.rules);;All Files (*)", options=options)
+        if file:
+            self.rules_file = file
+            self.rules = self.read_rules()
+            self.populate_rules()
+            self.populate_new_devices()
 
     def read_rules(self):
         rules = []
@@ -105,6 +121,11 @@ class UdevRuleGUI(QWidget):
         return rules
 
     def populate_rules(self):
+        while self.scroll_layout.count():
+            child = self.scroll_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+                
         self.scroll_layout.addWidget(QLabel('Device Name'), 0, 0)
         self.scroll_layout.addWidget(QLabel('Vendor ID'), 0, 1)
         self.scroll_layout.addWidget(QLabel('Product ID'), 0, 2)
@@ -126,6 +147,11 @@ class UdevRuleGUI(QWidget):
             self.scroll_layout.addWidget(name_input, i + 1, 5)
 
     def populate_new_devices(self):
+        while self.new_devices_layout.count():
+            child = self.new_devices_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
         self.new_devices_layout.addWidget(QLabel('Device Name'), 0, 0)
         self.new_devices_layout.addWidget(QLabel('Vendor ID'), 0, 1)
         self.new_devices_layout.addWidget(QLabel('Product ID'), 0, 2)
@@ -141,7 +167,7 @@ class UdevRuleGUI(QWidget):
             self.new_devices_layout.addWidget(QLabel(vendor_id), i + 1, 1)
             self.new_devices_layout.addWidget(QLabel(product_id), i + 1, 2)
             serial_input = QLineEdit('')
-            self.new_devices_layout.addWidget(serial_input, i + 1,3)
+            self.new_devices_layout.addWidget(serial_input, i + 1, 3)
             mode_input = QLineEdit('0777')
             self.new_devices_layout.addWidget(mode_input, i + 1, 4)
             name_input = QLineEdit()
@@ -153,10 +179,14 @@ class UdevRuleGUI(QWidget):
         os.execv(python, [python] + sys.argv)
 
     def update_all_rules(self):
+        if not self.rules_file:
+            QMessageBox.critical(self, 'Error', 'No rules file selected')
+            return
+
         try:
             with open(self.rules_file, 'w') as f:
                 # Update existing rules
-                for i, (vendor_id, product_id, serial_attr,mode, old_custom_name) in enumerate(self.rules):
+                for i, (vendor_id, product_id, serial_attr, mode, old_custom_name) in enumerate(self.rules):
                     new_custom_name = self.name_inputs[i].text()
                     if new_custom_name:  # Check if custom name is provided
                         if serial_attr:
@@ -177,8 +207,8 @@ class UdevRuleGUI(QWidget):
                             rule = f'SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{{idVendor}}=="{vendor_id}", ATTRS{{idProduct}}=="{product_id}", MODE="{mode}", SYMLINK+="{custom_name}"\n'
                         f.write(rule)
 
-            subprocess.run(['sudo','udevadm', 'control', '--reload-rules'])
-            subprocess.run(['sudo','udevadm', 'trigger'])
+            subprocess.run(['sudo', 'udevadm', 'control', '--reload-rules'])
+            subprocess.run(['sudo', 'udevadm', 'trigger'])
 
             QMessageBox.information(self, 'Success', 'Udev rules updated successfully')
 
